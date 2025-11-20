@@ -2,7 +2,7 @@
 ```
 university_repo/
 ├── config/
-│   └── database.php          # Veritabanı bağlantı ayarları
+│   └── database.php          # Veritabanı bağlantı ayarları - Database connection
 ├── includes/
 │   ├── functions.php         # Yardımcı fonksiyonlar
 │   └── auth.php             # Kimlik doğrulama fonksiyonları
