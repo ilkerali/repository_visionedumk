@@ -784,3 +784,61 @@ justify-content: center;
 }
 
 /*
+
+/* ============================================
+   PUBLICATION TYPE BADGES - Yayın Türü Badge Renkleri
+   ============================================ */
+
+/* Badge renkleri - Type Badge Colors */
+.badge-article,
+.type-badge.badge-article,
+.type-badge-sm.badge-article {
+    background: rgba(37, 99, 235, 0.1);
+    color: #2563eb;
+}
+
+.badge-conference,
+.type-badge.badge-conference,
+.type-badge-sm.badge-conference {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.badge-book,
+.type-badge.badge-book,
+.type-badge-sm.badge-book {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.badge-book_chapter,
+.type-badge.badge-book_chapter,
+.type-badge-sm.badge-book_chapter {
+    background: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+}
+
+.badge-project,
+.type-badge.badge-project,
+.type-badge-sm.badge-project {
+    background: rgba(6, 182, 212, 0.1);
+    color: #06b6d4;
+}
+
+.badge-patent,
+.type-badge.badge-patent,
+.type-badge-sm.badge-patent {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+/* Hover efektleri - Hover effects */
+.type-badge:hover {
+    opacity: 0.8;
+    transition: opacity var(--transition-fast);
+}
+
+/* ============================================
+   NOT: Bu kodları assets/css/dashboard.css dosyasının 
+        en sonuna ekleyebilirsiniz.
+   ============================================ */
