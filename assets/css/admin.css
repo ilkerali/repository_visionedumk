@@ -1,0 +1,163 @@
+/**
+ * Admin Panel Özel Stilleri
+ * 
+ * Admin paneline özel tasarım ve bileşenler
+ */
+
+/* ============================================
+   ADMIN SPECIFIC COLORS
+   ============================================ */
+.admin-content {
+    background: var(--gray-50);
+}
+
+/* ============================================
+   ADMIN STATS
+   ============================================ */
+.admin-content .stat-card {
+    border-left: 4px solid transparent;
+    border-top: none;
+}
+
+.admin-content .stat-card::before {
+    display: none;
+}
+
+.admin-content .stat-card.stat-primary {
+    border-left-color: var(--primary-color);
+}
+
+.admin-content .stat-card.stat-success {
+    border-left-color: var(--success-color);
+}
+
+.admin-content .stat-card.stat-info {
+    border-left-color: var(--info-color);
+}
+
+.admin-content .stat-card.stat-warning {
+    border-left-color: var(--warning-color);
+}
+
+/* ============================================
+   ADMIN NAVBAR ADJUSTMENTS
+   ============================================ */
+.navbar-admin {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border-bottom-color: var(--error-color);
+}
+
+.navbar-admin .navbar-title {
+    color: var(--white);
+}
+
+.navbar-admin .nav-link {
+    color: var(--gray-300);
+}
+
+.navbar-admin .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--white);
+}
+
+.navbar-admin .nav-link.active {
+    background-color: var(--error-color);
+    color: var(--white);
+}
+
+.navbar-admin .user-name {
+    color: var(--white);
+}
+
+/* ============================================
+   ADMIN CARDS
+   ============================================ */
+.admin-content .card {
+    border: none;
+    box-shadow: var(--shadow-md);
+}
+
+/* ============================================
+   ADMIN TABLES
+   ============================================ */
+.admin-content .data-table thead {
+    background: var(--gray-800);
+    color: var(--white);
+}
+
+.admin-content .data-table th {
+    color: var(--white);
+}
+
+/* ============================================
+   ADMIN ACTION BUTTONS
+   ============================================ */
+.admin-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-xl);
+}
+
+.admin-actions .btn {
+    flex: 1;
+}
+
+/* ============================================
+   STATUS BADGES
+   ============================================ */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.status-active {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success-color);
+}
+
+.status-inactive {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--error-color);
+}
+
+.status-pending {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning-color);
+}
+
+/* ============================================
+   FILTER SECTION
+   ============================================ */
+.filter-section {
+    background: var(--white);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-xl);
+    box-shadow: var(--shadow-sm);
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.filter-grid .form-group {
+    margin-bottom: 0;
+}
+
+/* ============================================
+   ADMIN SPECIFIC RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+    .admin-actions {
+        flex-direction: column;
+    }
+    
+    .filter-grid {
+        grid-template-columns: 1fr;
+    }
+}

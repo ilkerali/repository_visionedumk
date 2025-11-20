@@ -1,0 +1,21 @@
+## Proje Dizin Yapısı
+```
+university_repo/
+├── config/
+│   └── database.php          # Veritabanı bağlantı ayarları
+├── includes/
+│   ├── functions.php         # Yardımcı fonksiyonlar
+│   └── auth.php             # Kimlik doğrulama fonksiyonları
+├── assets/
+│   ├── css/
+│   │   └── style.css        # Stil dosyası
+│   └── js/
+│       └── main.js          # JavaScript dosyası
+├── login.php                # Giriş sayfası
+├── dashboard.php            # Ana kontrol paneli
+├── add_   .php              # faaliyet ekleme formu
+├── 
+├── my_publications.php      # Kullanıcının yayınları
+├── logout.php               # Çıkış işlemi
+└── admin/                   # (İleride eklenecek)
+    └── index.php
