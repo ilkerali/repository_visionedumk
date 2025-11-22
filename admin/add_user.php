@@ -18,6 +18,15 @@ $pdo = getDBConnection();
 $error = '';
 $success = '';
 
+// Get departments list for dropdown
+try {
+    $stmtDepts = $pdo->query("SELECT * FROM departments WHERE is_active = 1 ORDER BY display_order, department_name_en");
+    $departments = $stmtDepts->fetchAll();
+} catch (PDOException $e) {
+    error_log("Get departments error: " . $e->getMessage());
+    $departments = [];
+}
+
 // Form gönderildi mi? (Form submitted?)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = cleanInput($_POST['username'] ?? '');
@@ -25,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirmPassword = $_POST['confirm_password'] ?? '';
     $fullName = cleanInput($_POST['full_name'] ?? '');
     $email = cleanInput($_POST['email'] ?? '');
-    $department = cleanInput($_POST['department'] ?? '');
+    $departmentId = !empty($_POST['department_id']) ? intval($_POST['department_id']) : null;
     $role = cleanInput($_POST['role'] ?? 'faculty');
     $phone = cleanInput($_POST['phone'] ?? '');
     $officeLocation = cleanInput($_POST['office_location'] ?? '');
@@ -33,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $isActive = isset($_POST['is_active']) ? 1 : 0;
     
     // Validasyon (Validation)
-    if (empty($username) || empty($password) || empty($fullName) || empty($email) || empty($department)) {
+    if (empty($username) || empty($password) || empty($fullName) || empty($email)) {
         $error = "Please fill in all required fields.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = "Invalid email format.";
@@ -57,13 +66,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Şifreyi hashle (Hash password)
                 $passwordHash = password_hash($password, PASSWORD_DEFAULT);
                 
-                // Kullanıcıyı ekle (Insert user)
+                // Kullanıcıyı ekle (Insert user) - with department_id instead of department
                 $stmt = $pdo->prepare("
                     INSERT INTO users (
-                        username, password_hash, full_name, email, department, 
+                        username, password_hash, full_name, email, department_id, 
                         role, phone, office_location, bio, is_active, created_at
                     ) VALUES (
-                        :username, :password_hash, :full_name, :email, :department,
+                        :username, :password_hash, :full_name, :email, :department_id,
                         :role, :phone, :office_location, :bio, :is_active, NOW()
                     )
                 ");
@@ -73,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':password_hash' => $passwordHash,
                     ':full_name' => $fullName,
                     ':email' => $email,
-                    ':department' => $department,
+                    ':department_id' => $departmentId,
                     ':role' => $role,
                     ':phone' => $phone,
                     ':office_location' => $officeLocation,
@@ -196,22 +205,38 @@ include 'admin_header.php';
                     name="email" 
                     value="<?php echo isset($_POST['email']) ? sanitize($_POST['email']) : ''; ?>"
                     required
-                    placeholder="john.doe@uvt.edu.mk"
+                    placeholder="john.doe@vision.edu.mk"
                 >
             </div>
 
             <div class="form-group">
-                <label for="department">
-                    Department <span class="required">*</span>
+                <label for="department_id">
+                    Department
                 </label>
-                <input 
-                    type="text" 
-                    id="department" 
-                    name="department" 
-                    value="<?php echo isset($_POST['department']) ? sanitize($_POST['department']) : ''; ?>"
-                    required
-                    placeholder="Computer Science"
+                <select 
+                    id="department_id" 
+                    name="department_id"
                 >
+                    <option value="">-- Select Department --</option>
+                    <?php 
+                    $current_faculty = '';
+                    foreach ($departments as $dept): 
+                        // Group by faculty
+                        if ($dept['faculty_name'] && $dept['faculty_name'] != $current_faculty) {
+                            if ($current_faculty != '') echo '</optgroup>';
+                            echo '<optgroup label="' . htmlspecialchars($dept['faculty_name']) . '">';
+                            $current_faculty = $dept['faculty_name'];
+                        }
+                        
+                        $selected = (isset($_POST['department_id']) && $_POST['department_id'] == $dept['department_id']) ? 'selected' : '';
+                    ?>
+                        <option value="<?php echo $dept['department_id']; ?>" <?php echo $selected; ?>>
+                            <?php echo htmlspecialchars($dept['department_name_en']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                    <?php if ($current_faculty != '') echo '</optgroup>'; ?>
+                </select>
+                <small class="form-help">Select department from the list</small>
             </div>
         </div>
 
