@@ -1,8 +1,8 @@
 <?php
 /**
- * Kullanıcı Giriş Sayfası
+ * User Login Page
  * 
- * Bu sayfa kullanıcıların sisteme giriş yapmasını sağlar.
+ * This page allows users to log in to the system.
  */
 
 require_once 'config/database.php';
@@ -11,7 +11,7 @@ require_once 'includes/auth.php';
 
 startSession();
 
-// Zaten giriş yapmışsa dashboard'a yönlendir
+// Redirect to dashboard if already logged in
 if (isLoggedIn()) {
     header("Location: dashboard.php");
     exit();
@@ -20,21 +20,21 @@ if (isLoggedIn()) {
 $error = '';
 $success = '';
 
-// Çıkış mesajı
+// Logout message
 if (isset($_GET['logout'])) {
-    $success = 'Başarıyla çıkış yaptınız.';
+    $success = 'You have successfully logged out.';
 }
 
-// Form gönderildi mi?
+// Check if form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = cleanInput($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? ''; // Şifreyi temizleme, hash karşılaştırması yapılacak
+    $password = $_POST['password'] ?? ''; // Don't sanitize password, hash comparison will be done
     
-    // Validasyon
+    // Validation
     if (empty($username) || empty($password)) {
-        $error = 'Kullanıcı adı ve şifre gereklidir.';
+        $error = 'Username and password are required.';
     } else {
-        // Kimlik doğrulama
+        // Authentication
         $user = authenticateUser($username, $password);
         
         if ($user) {
@@ -42,32 +42,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header("Location: dashboard.php");
             exit();
         } else {
-            $error = 'Kullanıcı adı veya şifre hatalı.';
+            $error = 'Invalid username or password.';
         }
     }
 }
 ?>
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Giriş - Uluslararası Vizyon Üniversitesi</title>
+    <title>Login - International Vision University</title>
     <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .university-branding {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            gap: 20px;
+        }
+        
+        .university-logo img {
+            max-width: 120px;
+            height: auto;
+        }
+        
+        .university-name h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0;
+            line-height: 1.3;
+        }
+        
+        .login-header h1 {
+            font-size: 20px;
+            margin: 10px 0 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .university-branding {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .university-name h2 {
+                font-size: 20px;
+                text-align: center;
+            }
+        }
+    </style>
 </head>
 <body class="login-page">
     <div class="login-container">
         <div class="login-box">
-            <!-- Logo ve Başlık -->
+            <!-- Logo and Header -->
             <div class="login-header">
-                <div class="university-logo">
-                    <img src="assets/images/logo.png" alt="University Logo" onerror="this.style.display='none'">
+                <div class="university-branding">
+                    <div class="university-logo">
+                        <img src="assets/images/vision_logo_k.png" alt="Vision University Logo" onerror="this.style.display='none'">
+                    </div>
+                    <div class="university-name">
+                        <h2>International Vision University</h2>
+                    </div>
                 </div>
-                <h1>Akademik Yayın Repositori</h1>
-                <p class="subtitle">Uluslararası Vizyon Üniversitesi</p>
+                <h1>Academic Publication Repository</h1>
+                <p class="subtitle">Faculty & Staff Portal</p>
             </div>
 
-            <!-- Hata ve Başarı Mesajları -->
+            <!-- Error and Success Messages -->
             <?php if ($error): ?>
                 <div class="alert alert-error">
                     <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -89,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
 
-            <!-- Giriş Formu -->
+            <!-- Login Form -->
             <form method="POST" action="login.php" class="login-form">
                 <div class="form-group">
                     <label for="username">
@@ -97,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                             <circle cx="12" cy="7" r="4"></circle>
                         </svg>
-                        Kullanıcı Adı
+                        Username
                     </label>
                     <input 
                         type="text" 
@@ -106,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         value="<?php echo isset($username) ? sanitize($username) : ''; ?>"
                         required 
                         autofocus
-                        placeholder="Kullanıcı adınızı girin"
+                        placeholder="Enter your username"
                     >
                 </div>
 
@@ -116,41 +160,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                         </svg>
-                        Şifre
+                        Password
                     </label>
                     <input 
                         type="password" 
                         id="password" 
                         name="password" 
                         required
-                        placeholder="Şifrenizi girin"
+                        placeholder="Enter your password"
                     >
                 </div>
 
                 <div class="form-options">
                     <label class="checkbox-label">
                         <input type="checkbox" name="remember" value="1">
-                        <span>Beni Hatırla</span>
+                        <span>Remember Me</span>
                     </label>
-                    <a href="forgot-password.php" class="forgot-link">Şifremi Unuttum</a>
+                    <a href="forgot-password.php" class="forgot-link">Forgot Password?</a>
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-block">
-                    Giriş Yap
+                    Sign In
                 </button>
             </form>
 
-            <!-- Test Bilgileri (Production'da kaldırın) -->
-            <div class="test-credentials">
-                <p><strong>Test Hesapları:</strong></p>
-                <p>Admin: <code>admin</code> / Şifre: <code>123456</code></p>
-                <p>Öğretim Üyesi: <code>ahmet.yilmaz</code> / Şifre: <code>123456</code></p>
-            </div>
-
             <!-- Footer -->
             <div class="login-footer">
-                <p>&copy; 2024 Uluslararası Vizyon Üniversitesi</p>
-                <p><a href="mailto:support@uvt.edu.mk">Teknik Destek</a></p>
+                <p>&copy; 2024 International Vision University</p>
+                <p><a href="mailto:ilker@vision.edu.mk">Technical Support</a></p>
             </div>
         </div>
     </div>

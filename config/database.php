@@ -12,7 +12,7 @@
 // CPanel Veritabanı Yapılandırması
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'vizyoned_repo');
-define('DB_USER', 'vizyonde_ilker');
+define('DB_USER', 'vizyoned_ilker');
 define('DB_PASS', 'Z8jIZ^Goe6CU2bo7');
 define('DB_CHARSET', 'utf8mb4');
 

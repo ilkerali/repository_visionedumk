@@ -1,12 +1,17 @@
         </div>
     </main>
 
-    <!-- Footer (Optional) -->
-    <footer style="background: var(--white); border-top: 1px solid var(--gray-200); padding: var(--spacing-lg); text-align: center; color: var(--gray-600); font-size: 0.875rem; margin-top: var(--spacing-2xl);">
-        <p>&copy; <?php echo date('Y'); ?> International Vision University. All rights reserved.</p>
+    <!-- Footer -->
+    <footer style="background: #2c3e50; color: white; padding: 1.5rem 0; margin-top: 3rem; text-align: center;">
+        <div class="container">
+            <p style="margin: 0.5rem 0; font-size: 0.9rem;">&copy; <?php echo date('Y'); ?> International Vision University. All rights reserved.</p>
+            <p style="margin: 0.5rem 0; font-size: 0.9rem;">
+                <a href="mailto:ilker@vision.edu.mk" style="color: white; text-decoration: none;">Technical Support</a> | 
+                <a href="https://vision.edu.mk" target="_blank" style="color: white; text-decoration: none;">University Website</a>
+            </p>
+        </div>
     </footer>
 
-    <!-- JavaScript Files -->
     <script src="../assets/js/main.js"></script>
 </body>
 </html>
