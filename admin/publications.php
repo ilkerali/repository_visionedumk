@@ -56,6 +56,7 @@ try {
         FROM publications p
         JOIN publication_types pt ON p.type_id = pt.type_id
         JOIN users u ON p.user_id = u.user_id
+        LEFT JOIN departments d ON u.department_id = d.department_id
         WHERE 1=1
     ";
     
@@ -63,7 +64,7 @@ try {
     
     // Arama filtresi (Search filter)
     if (!empty($searchTerm)) {
-        $countSql .= " AND (p.title LIKE :search OR p.authors LIKE :search OR p.journal LIKE :search OR p.conference LIKE :search OR p.publisher LIKE :search)";
+        $countSql .= " AND (p.title LIKE :search OR p.authors LIKE :search OR p.journal_name LIKE :search OR p.conference_name LIKE :search OR p.publisher LIKE :search)";
         $params[':search'] = "%$searchTerm%";
     }
     
@@ -90,21 +91,22 @@ try {
     $totalRecords = $stmtCount->fetch()['total'];
     $totalPages = ceil($totalRecords / $perPage);
     
-    // Ana sorgu (Main query)
+    // Ana sorgu (Main query) - FIXED: Added department join and proper field names
     $sql = "
         SELECT p.*, 
                pt.type_name_en, pt.type_code,
                u.full_name as author_name,
-               u.department
+               COALESCE(d.department_name_en, 'No Department') as department_name
         FROM publications p
         JOIN publication_types pt ON p.type_id = pt.type_id
         JOIN users u ON p.user_id = u.user_id
+        LEFT JOIN departments d ON u.department_id = d.department_id
         WHERE 1=1
     ";
     
     // Aynı filtreleri uygula (Apply same filters)
     if (!empty($searchTerm)) {
-        $sql .= " AND (p.title LIKE :search OR p.authors LIKE :search OR p.journal LIKE :search OR p.conference LIKE :search OR p.publisher LIKE :search)";
+        $sql .= " AND (p.title LIKE :search OR p.authors LIKE :search OR p.journal_name LIKE :search OR p.conference_name LIKE :search OR p.publisher LIKE :search)";
     }
     if ($typeFilter > 0) {
         $sql .= " AND p.type_id = :type_id";
@@ -145,6 +147,7 @@ try {
     $stmtTypes = $pdo->query("
         SELECT type_id, type_name_en, type_code 
         FROM publication_types 
+        WHERE is_active = 1
         ORDER BY type_name_en
     ");
     $publicationTypes = $stmtTypes->fetchAll();
@@ -385,17 +388,17 @@ include 'admin_header.php';
                             <td>
                                 <div style="display: flex; flex-direction: column;">
                                     <strong><?php echo sanitize($pub['author_name']); ?></strong>
-                                    <small style="color: var(--gray-600);"><?php echo sanitize($pub['department']); ?></small>
+                                    <small style="color: var(--gray-600);"><?php echo sanitize($pub['department_name']); ?></small>
                                 </div>
                             </td>
                             <td>
-                                <?php if ($pub['journal']): ?>
-                                    <small title="<?php echo sanitize($pub['journal']); ?>">
-                                        <?php echo sanitize(substr($pub['journal'], 0, 20)); ?><?php echo strlen($pub['journal']) > 20 ? '...' : ''; ?>
+                                <?php if ($pub['journal_name']): ?>
+                                    <small title="<?php echo sanitize($pub['journal_name']); ?>">
+                                        <?php echo sanitize(substr($pub['journal_name'], 0, 20)); ?><?php echo strlen($pub['journal_name']) > 20 ? '...' : ''; ?>
                                     </small>
-                                <?php elseif ($pub['conference']): ?>
-                                    <small title="<?php echo sanitize($pub['conference']); ?>">
-                                        <?php echo sanitize(substr($pub['conference'], 0, 20)); ?><?php echo strlen($pub['conference']) > 20 ? '...' : ''; ?>
+                                <?php elseif ($pub['conference_name']): ?>
+                                    <small title="<?php echo sanitize($pub['conference_name']); ?>">
+                                        <?php echo sanitize(substr($pub['conference_name'], 0, 20)); ?><?php echo strlen($pub['conference_name']) > 20 ? '...' : ''; ?>
                                     </small>
                                 <?php elseif ($pub['publisher']): ?>
                                     <small title="<?php echo sanitize($pub['publisher']); ?>">
