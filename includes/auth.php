@@ -1,12 +1,12 @@
 <?php
 /**
- * Kimlik Doğrulama (Authentication) Sistemi
+ * Kimlik Doğrulama (Authentication) Sistemi - FIXED VERSION
  * 
  * Bu modül kullanıcı girişi, çıkışı ve oturum yönetimini sağlar.
- * Güvenlik prensipleri:
- * - Password hashing (bcrypt)
- * - Session hijacking koruması
- * - Brute force attack koruması (basit versiyon)
+ * 
+ * CHANGES:
+ * - Removed 'department' column (now using department_id with JOIN)
+ * - Added department_name_en to session for display purposes
  */
 
 require_once 'functions.php';
@@ -23,12 +23,23 @@ function authenticateUser($username, $password) {
     $pdo = getDBConnection();
     
     try {
-        // Kullanıcıyı veritabanından al
+        // FIXED: JOIN with departments table to get department name
         $stmt = $pdo->prepare("
-            SELECT user_id, username, password_hash, full_name, email, 
-                   department, role, is_active 
-            FROM users 
-            WHERE username = :username AND is_active = TRUE
+            SELECT 
+                u.user_id, 
+                u.username, 
+                u.password_hash, 
+                u.full_name, 
+                u.email, 
+                u.department_id,
+                u.role, 
+                u.is_active,
+                d.department_name_en,
+                d.department_name_tr,
+                d.department_code
+            FROM users u
+            LEFT JOIN departments d ON u.department_id = d.department_id
+            WHERE u.username = :username AND u.is_active = TRUE
             LIMIT 1
         ");
         
@@ -81,13 +92,16 @@ function loginUser($user) {
     // Session fixation saldırılarını önle
     session_regenerate_id(true);
     
-    // Kullanıcı bilgilerini session'a kaydet
+    // FIXED: Save department_id and department_name_en instead of department text
     $_SESSION['user_id'] = $user['user_id'];
     $_SESSION['username'] = $user['username'];
     $_SESSION['full_name'] = $user['full_name'];
     $_SESSION['email'] = $user['email'];
     $_SESSION['role'] = $user['role'];
-    $_SESSION['department'] = $user['department'];
+    $_SESSION['department_id'] = $user['department_id'];
+    $_SESSION['department_name_en'] = $user['department_name_en'] ?? 'N/A';
+    $_SESSION['department_name_tr'] = $user['department_name_tr'] ?? 'N/A';
+    $_SESSION['department_code'] = $user['department_code'] ?? 'N/A';
     
     // Güvenlik için ek bilgiler
     $_SESSION['login_time'] = time();
@@ -194,5 +208,20 @@ function validateCSRFToken($token) {
     startSession();
     
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+}
+
+/**
+ * Helper function: Get current user's department info
+ * 
+ * @return array Department information
+ */
+function getCurrentUserDepartment() {
+    startSession();
+    return [
+        'department_id' => $_SESSION['department_id'] ?? null,
+        'department_name_en' => $_SESSION['department_name_en'] ?? 'N/A',
+        'department_name_tr' => $_SESSION['department_name_tr'] ?? 'N/A',
+        'department_code' => $_SESSION['department_code'] ?? 'N/A',
+    ];
 }
 ?>

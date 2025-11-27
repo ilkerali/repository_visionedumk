@@ -1,9 +1,13 @@
 <?php
 /**
- * Faculty Profile Page
+ * Faculty Profile Page - FIXED VERSION
  * 
- * Allows faculty members to view and update their profile information
- * Including personal info, contact details, and password change
+ * Displays and allows editing of faculty member's profile information
+ * 
+ * FIXES:
+ * - Removed dependency on 'department' column
+ * - Uses department_id with JOIN to get department info
+ * - Updated session variable references
  */
 
 require_once '../config/database.php';
@@ -13,8 +17,8 @@ require_once '../includes/auth.php';
 startSession();
 requireLogin('../login.php');
 
-// Only faculty members can access this page
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'faculty') {
+// Only faculty can access this page
+if ($_SESSION['role'] !== 'faculty') {
     header("Location: ../dashboard.php");
     exit();
 }
@@ -24,136 +28,142 @@ $userId = $_SESSION['user_id'];
 $error = '';
 $success = '';
 
-// Fetch user data
+// Handle form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $fullName = cleanInput($_POST['full_name'] ?? '');
+    $email = cleanInput($_POST['email'] ?? '');
+    $phone = cleanInput($_POST['phone'] ?? '');
+    $officeLocation = cleanInput($_POST['office_location'] ?? '');
+    $bio = cleanInput($_POST['bio'] ?? '');
+    $departmentId = isset($_POST['department_id']) ? (int)$_POST['department_id'] : null;
+    
+    // Validation
+    if (empty($fullName) || empty($email)) {
+        $error = "Full name and email are required.";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = "Please enter a valid email address.";
+    } else {
+        try {
+            // FIXED: Use department_id instead of department text
+            $stmt = $pdo->prepare("
+                UPDATE users 
+                SET full_name = :full_name,
+                    email = :email,
+                    phone = :phone,
+                    office_location = :office_location,
+                    bio = :bio,
+                    department_id = :department_id
+                WHERE user_id = :user_id
+            ");
+            
+            $stmt->execute([
+                ':full_name' => $fullName,
+                ':email' => $email,
+                ':phone' => $phone,
+                ':office_location' => $officeLocation,
+                ':bio' => $bio,
+                ':department_id' => $departmentId,
+                ':user_id' => $userId
+            ]);
+            
+            // Update session variables
+            $_SESSION['full_name'] = $fullName;
+            $_SESSION['email'] = $email;
+            
+            // FIXED: Update department session variables
+            if ($departmentId) {
+                $deptStmt = $pdo->prepare("
+                    SELECT department_name_en, department_name_tr, department_code 
+                    FROM departments 
+                    WHERE department_id = :dept_id
+                ");
+                $deptStmt->execute([':dept_id' => $departmentId]);
+                $dept = $deptStmt->fetch();
+                
+                if ($dept) {
+                    $_SESSION['department_id'] = $departmentId;
+                    $_SESSION['department_name_en'] = $dept['department_name_en'];
+                    $_SESSION['department_name_tr'] = $dept['department_name_tr'];
+                    $_SESSION['department_code'] = $dept['department_code'];
+                }
+            }
+            
+            // Log activity
+            logActivity($pdo, $userId, 'profile_update', 'users', $userId);
+            
+            $success = "Profile updated successfully!";
+            
+        } catch (PDOException $e) {
+            error_log("Profile update error: " . $e->getMessage());
+            $error = "An error occurred while updating your profile. Please try again.";
+        }
+    }
+}
+
+// FIXED: Fetch user data with department JOIN
 try {
     $stmt = $pdo->prepare("
-        SELECT user_id, username, full_name, email, department, 
-               phone, office_location, bio, profile_image,
-               created_at, last_login
-        FROM users 
-        WHERE user_id = :user_id
+        SELECT 
+            u.user_id,
+            u.username,
+            u.full_name,
+            u.email,
+            u.phone,
+            u.office_location,
+            u.bio,
+            u.department_id,
+            u.created_at,
+            u.last_login,
+            d.department_name_en,
+            d.department_name_tr,
+            d.department_code,
+            d.faculty_name
+        FROM users u
+        LEFT JOIN departments d ON u.department_id = d.department_id
+        WHERE u.user_id = :user_id
     ");
+    
     $stmt->execute([':user_id' => $userId]);
     $user = $stmt->fetch();
     
     if (!$user) {
-        header("Location: ../logout.php");
-        exit();
+        die("User not found.");
     }
+    
+    // Get all departments for dropdown
+    $deptStmt = $pdo->query("
+        SELECT department_id, department_name_en, department_code, faculty_name
+        FROM departments
+        WHERE is_active = 1
+        ORDER BY faculty_name, department_name_en
+    ");
+    $departments = $deptStmt->fetchAll();
+    
+    // Get user's publication statistics
+    $statsStmt = $pdo->prepare("
+        SELECT 
+            COUNT(*) as total_publications,
+            COUNT(CASE WHEN publication_year = YEAR(CURDATE()) THEN 1 END) as this_year,
+            COUNT(CASE WHEN publication_year = YEAR(CURDATE()) - 1 THEN 1 END) as last_year
+        FROM publications
+        WHERE user_id = :user_id
+    ");
+    $statsStmt->execute([':user_id' => $userId]);
+    $stats = $statsStmt->fetch();
+    
 } catch (PDOException $e) {
     error_log("Profile fetch error: " . $e->getMessage());
-    $error = "Error loading profile information.";
+    die("Error loading profile data.");
 }
 
-// Handle profile update
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    
-    if ($_POST['action'] === 'update_profile') {
-        $fullName = cleanInput($_POST['full_name'] ?? '');
-        $email = cleanInput($_POST['email'] ?? '');
-        $phone = cleanInput($_POST['phone'] ?? '');
-        $officeLocation = cleanInput($_POST['office_location'] ?? '');
-        $bio = cleanInput($_POST['bio'] ?? '');
-        
-        // Validation
-        if (empty($fullName) || empty($email)) {
-            $error = "Full name and email are required.";
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = "Invalid email format.";
-        } else {
-            try {
-                $stmt = $pdo->prepare("
-                    UPDATE users 
-                    SET full_name = :full_name,
-                        email = :email,
-                        phone = :phone,
-                        office_location = :office_location,
-                        bio = :bio
-                    WHERE user_id = :user_id
-                ");
-                
-                $stmt->execute([
-                    ':full_name' => $fullName,
-                    ':email' => $email,
-                    ':phone' => $phone,
-                    ':office_location' => $officeLocation,
-                    ':bio' => $bio,
-                    ':user_id' => $userId
-                ]);
-                
-                // Update session
-                $_SESSION['full_name'] = $fullName;
-                $_SESSION['email'] = $email;
-                
-                // Log activity
-                logActivity($pdo, $userId, 'profile_update', 'users', $userId);
-                
-                $success = "Profile updated successfully!";
-                
-                // Refresh user data
-                $user['full_name'] = $fullName;
-                $user['email'] = $email;
-                $user['phone'] = $phone;
-                $user['office_location'] = $officeLocation;
-                $user['bio'] = $bio;
-                
-            } catch (PDOException $e) {
-                error_log("Profile update error: " . $e->getMessage());
-                $error = "Error updating profile. Please try again.";
-            }
-        }
-    }
-    
-    // Handle password change
-    if ($_POST['action'] === 'change_password') {
-        $currentPassword = $_POST['current_password'] ?? '';
-        $newPassword = $_POST['new_password'] ?? '';
-        $confirmPassword = $_POST['confirm_password'] ?? '';
-        
-        if (empty($currentPassword) || empty($newPassword) || empty($confirmPassword)) {
-            $error = "All password fields are required.";
-        } elseif ($newPassword !== $confirmPassword) {
-            $error = "New passwords do not match.";
-        } elseif (strlen($newPassword) < 6) {
-            $error = "Password must be at least 6 characters long.";
-        } else {
-            try {
-                // Verify current password
-                $stmt = $pdo->prepare("SELECT password_hash FROM users WHERE user_id = :user_id");
-                $stmt->execute([':user_id' => $userId]);
-                $passwordHash = $stmt->fetchColumn();
-                
-                if (!password_verify($currentPassword, $passwordHash)) {
-                    $error = "Current password is incorrect.";
-                } else {
-                    // Update password
-                    $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
-                    $stmt = $pdo->prepare("UPDATE users SET password_hash = :hash WHERE user_id = :user_id");
-                    $stmt->execute([':hash' => $newHash, ':user_id' => $userId]);
-                    
-                    // Log activity
-                    logActivity($pdo, $userId, 'password_change', 'users', $userId);
-                    
-                    $success = "Password changed successfully!";
-                }
-            } catch (PDOException $e) {
-                error_log("Password change error: " . $e->getMessage());
-                $error = "Error changing password. Please try again.";
-            }
-        }
-    }
-}
-
-// Set page title for header
-$page_title = "Profile";
+$page_title = "My Profile";
 include 'faculty_header.php';
 ?>
 
-<!-- Page Header -->
 <div class="page-header">
     <div>
         <h1>My Profile</h1>
-        <p class="text-muted">Manage your account settings and preferences</p>
+        <p class="text-muted">View and edit your profile information</p>
     </div>
 </div>
 
@@ -179,79 +189,142 @@ include 'faculty_header.php';
     </div>
 <?php endif; ?>
 
-<!-- Profile Content -->
-<div class="dashboard-row">
-    <!-- Profile Information -->
-    <div class="dashboard-col-6">
-        <form method="POST" action="profile.php" class="form-section">
-            <input type="hidden" name="action" value="update_profile">
+<!-- Statistics Cards -->
+<div class="stats-grid stats-grid-3">
+    <div class="stat-card stat-primary">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+        </div>
+        <div class="stat-content">
+            <h3><?php echo $stats['total_publications']; ?></h3>
+            <p>Total Publications</p>
+        </div>
+    </div>
+
+    <div class="stat-card stat-success">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+        </div>
+        <div class="stat-content">
+            <h3><?php echo $stats['this_year']; ?></h3>
+            <p>This Year</p>
+        </div>
+    </div>
+
+    <div class="stat-card stat-info">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+        </div>
+        <div class="stat-content">
+            <h3><?php echo $stats['last_year']; ?></h3>
+            <p>Last Year</p>
+        </div>
+    </div>
+</div>
+
+<!-- Profile Form -->
+<div class="card">
+    <div class="card-header">
+        <h2>Profile Information</h2>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="profile.php" class="form-horizontal">
             
-            <h2 class="form-section-title">
-                <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                Personal Information
-            </h2>
-
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input 
-                    type="text" 
-                    id="username" 
-                    value="<?php echo sanitize($user['username']); ?>" 
-                    disabled
-                >
-                <small class="form-help">Username cannot be changed</small>
-            </div>
-
-            <div class="form-group">
-                <label for="full_name">
-                    Full Name <span class="required">*</span>
-                </label>
-                <input 
-                    type="text" 
-                    id="full_name" 
-                    name="full_name" 
-                    value="<?php echo sanitize($user['full_name']); ?>" 
-                    required
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="email">
-                    Email Address <span class="required">*</span>
-                </label>
-                <input 
-                    type="email" 
-                    id="email" 
-                    name="email" 
-                    value="<?php echo sanitize($user['email']); ?>" 
-                    required
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="department">Department</label>
-                <input 
-                    type="text" 
-                    id="department" 
-                    value="<?php echo sanitize($user['department']); ?>" 
-                    disabled
-                >
-                <small class="form-help">Contact admin to change department</small>
-            </div>
-
-            <div class="form-row">
+            <!-- Basic Information -->
+            <div class="form-section">
+                <h3>Basic Information</h3>
+                
                 <div class="form-group">
-                    <label for="phone">Phone Number</label>
+                    <label for="username">Username</label>
                     <input 
                         type="text" 
+                        id="username" 
+                        value="<?php echo sanitize($user['username']); ?>" 
+                        disabled
+                        class="input-disabled"
+                    >
+                    <small class="form-text">Username cannot be changed</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="full_name">Full Name <span class="required">*</span></label>
+                    <input 
+                        type="text" 
+                        id="full_name" 
+                        name="full_name" 
+                        value="<?php echo sanitize($user['full_name']); ?>" 
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email <span class="required">*</span></label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email" 
+                        value="<?php echo sanitize($user['email']); ?>" 
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">Phone</label>
+                    <input 
+                        type="tel" 
                         id="phone" 
                         name="phone" 
                         value="<?php echo sanitize($user['phone'] ?? ''); ?>"
                         placeholder="+389 XX XXX XXX"
                     >
+                </div>
+
+                <!-- FIXED: Department dropdown with department_id -->
+                <div class="form-group">
+                    <label for="department_id">Department</label>
+                    <select id="department_id" name="department_id">
+                        <option value="">Select Department</option>
+                        <?php 
+                        $currentFaculty = '';
+                        foreach ($departments as $dept): 
+                            if ($dept['faculty_name'] != $currentFaculty):
+                                if ($currentFaculty != '') echo '</optgroup>';
+                                $currentFaculty = $dept['faculty_name'];
+                                echo '<optgroup label="' . sanitize($currentFaculty) . '">';
+                            endif;
+                        ?>
+                            <option 
+                                value="<?php echo $dept['department_id']; ?>"
+                                <?php echo ($user['department_id'] == $dept['department_id']) ? 'selected' : ''; ?>
+                            >
+                                <?php echo sanitize($dept['department_name_en']); ?> 
+                                (<?php echo sanitize($dept['department_code']); ?>)
+                            </option>
+                        <?php 
+                        endforeach;
+                        if ($currentFaculty != '') echo '</optgroup>';
+                        ?>
+                    </select>
+                    <!-- FIXED: Display current department -->
+                    <?php if ($user['department_name_en']): ?>
+                        <small class="form-text">
+                            Current: <?php echo sanitize($user['department_name_en']); ?> 
+                            (<?php echo sanitize($user['department_code']); ?>)
+                        </small>
+                    <?php endif; ?>
                 </div>
 
                 <div class="form-group">
@@ -261,22 +334,65 @@ include 'faculty_header.php';
                         id="office_location" 
                         name="office_location" 
                         value="<?php echo sanitize($user['office_location'] ?? ''); ?>"
-                        placeholder="Building A, Room 201"
+                        placeholder="e.g., Building A, Room 305"
                     >
                 </div>
             </div>
 
-            <div class="form-group">
-                <label for="bio">Biography</label>
-                <textarea 
-                    id="bio" 
-                    name="bio" 
-                    rows="5"
-                    placeholder="Tell us about your research interests, academic background, and expertise..."
-                ><?php echo sanitize($user['bio'] ?? ''); ?></textarea>
-                <small class="form-help">This will be displayed on your public profile</small>
+            <!-- Bio Section -->
+            <div class="form-section">
+                <h3>Biography</h3>
+                
+                <div class="form-group">
+                    <label for="bio">About Me</label>
+                    <textarea 
+                        id="bio" 
+                        name="bio" 
+                        rows="6"
+                        placeholder="Tell us about your research interests, academic background, etc."
+                    ><?php echo sanitize($user['bio'] ?? ''); ?></textarea>
+                    <small class="form-text">This information will be displayed on your public profile</small>
+                </div>
             </div>
 
+            <!-- Account Information (Read-only) -->
+            <div class="form-section">
+                <h3>Account Information</h3>
+                
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Member Since</label>
+                        <p><?php echo date('F j, Y', strtotime($user['created_at'])); ?></p>
+                    </div>
+
+                    <div class="info-item">
+                        <label>Last Login</label>
+                        <p>
+                            <?php 
+                            if ($user['last_login']) {
+                                echo date('F j, Y g:i A', strtotime($user['last_login']));
+                            } else {
+                                echo 'Never';
+                            }
+                            ?>
+                        </p>
+                    </div>
+
+                    <div class="info-item">
+                        <label>User ID</label>
+                        <p><?php echo $user['user_id']; ?></p>
+                    </div>
+
+                    <div class="info-item">
+                        <label>Role</label>
+                        <p>
+                            <span class="badge badge-faculty">Faculty Member</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -286,133 +402,74 @@ include 'faculty_header.php';
                     </svg>
                     Save Changes
                 </button>
-                <button type="reset" class="btn btn-secondary">Reset</button>
-            </div>
-        </form>
-    </div>
-
-    <!-- Password Change & Account Info -->
-    <div class="dashboard-col-6">
-        <!-- Change Password -->
-        <form method="POST" action="profile.php" class="form-section">
-            <input type="hidden" name="action" value="change_password">
-            
-            <h2 class="form-section-title">
-                <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-                Change Password
-            </h2>
-
-            <div class="form-group">
-                <label for="current_password">
-                    Current Password <span class="required">*</span>
-                </label>
-                <input 
-                    type="password" 
-                    id="current_password" 
-                    name="current_password"
-                    placeholder="Enter your current password"
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="new_password">
-                    New Password <span class="required">*</span>
-                </label>
-                <input 
-                    type="password" 
-                    id="new_password" 
-                    name="new_password"
-                    placeholder="Enter new password"
-                    minlength="6"
-                >
-                <small class="form-help">Minimum 6 characters</small>
-            </div>
-
-            <div class="form-group">
-                <label for="confirm_password">
-                    Confirm New Password <span class="required">*</span>
-                </label>
-                <input 
-                    type="password" 
-                    id="confirm_password" 
-                    name="confirm_password"
-                    placeholder="Confirm new password"
-                    minlength="6"
-                >
-            </div>
-
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">
+                
+                <a href="dashboard.php" class="btn btn-secondary">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
-                    Change Password
-                </button>
-            </div>
-        </form>
-
-        <!-- Account Statistics -->
-        <div class="card">
-            <div class="card-header">
-                <h2>Account Statistics</h2>
-            </div>
-            <div class="card-body">
-                <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
-                    <div style="display: flex; justify-content: space-between; padding: var(--spacing-sm) 0; border-bottom: 1px solid var(--gray-200);">
-                        <span style="color: var(--gray-600);">Member Since</span>
-                        <strong><?php echo date('F j, Y', strtotime($user['created_at'])); ?></strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: var(--spacing-sm) 0; border-bottom: 1px solid var(--gray-200);">
-                        <span style="color: var(--gray-600);">Last Login</span>
-                        <strong>
-                            <?php 
-                            echo $user['last_login'] 
-                                ? date('M j, Y H:i', strtotime($user['last_login'])) 
-                                : 'N/A'; 
-                            ?>
-                        </strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: var(--spacing-sm) 0;">
-                        <span style="color: var(--gray-600);">Total Publications</span>
-                        <strong>
-                            <?php
-                            try {
-                                $stmt = $pdo->prepare("SELECT COUNT(*) FROM publications WHERE user_id = :user_id");
-                                $stmt->execute([':user_id' => $userId]);
-                                echo $stmt->fetchColumn();
-                            } catch (PDOException $e) {
-                                echo 'N/A';
-                            }
-                            ?>
-                        </strong>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Help Section -->
-        <div class="card">
-            <div class="card-header">
-                <h2>Need Help?</h2>
-            </div>
-            <div class="card-body">
-                <p style="margin-bottom: var(--spacing-md); color: var(--gray-600);">
-                    If you need to update information that cannot be changed here (like username or department), 
-                    please contact the system administrator.
-                </p>
-                <a href="mailto:admin@uvt.edu.mk" class="btn btn-secondary btn-block">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                        <polyline points="22,6 12,13 2,6"></polyline>
-                    </svg>
-                    Contact Administrator
+                    Cancel
                 </a>
             </div>
-        </div>
+        </form>
     </div>
 </div>
+
+<!-- Additional CSS for info grid -->
+<style>
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-md);
+}
+
+.info-item label {
+    font-weight: 600;
+    color: var(--gray-600);
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    display: block;
+}
+
+.info-item p {
+    color: var(--text-color);
+    font-size: 1rem;
+    margin: 0;
+}
+
+.form-section {
+    margin-bottom: var(--spacing-xl);
+    padding-bottom: var(--spacing-xl);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.form-section:last-of-type {
+    border-bottom: none;
+}
+
+.form-section h3 {
+    margin-bottom: var(--spacing-lg);
+    color: var(--gray-800);
+    font-size: 1.25rem;
+}
+
+.input-disabled {
+    background-color: var(--gray-100);
+    cursor: not-allowed;
+}
+
+.required {
+    color: var(--error-color);
+}
+
+.badge-faculty {
+    background-color: var(--success-color);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+</style>
 
 <?php include 'faculty_footer.php'; ?>
