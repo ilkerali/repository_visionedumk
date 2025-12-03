@@ -761,9 +761,9 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                     <select name="department" id="department" class="filter-select">
                         <option value="">All Departments</option>
                         <?php foreach ($departments as $dept): ?>
-                            <option value="<?php echo $dept['department_id']; ?>" 
+                            <option value="<?php echo (int)$dept['department_id']; ?>" 
                                     <?php echo $departmentFilter == $dept['department_id'] ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($dept['department_name_en']); ?>
+                                <?php echo htmlspecialchars($dept['department_name_en'], ENT_QUOTES, 'UTF-8'); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -774,9 +774,9 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                     <select name="type" id="type" class="filter-select">
                         <option value="">All Types</option>
                         <?php foreach ($publicationTypes as $type): ?>
-                            <option value="<?php echo $type['type_id']; ?>" 
+                            <option value="<?php echo (int)$type['type_id']; ?>" 
                                     <?php echo $typeFilter == $type['type_id'] ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($type['type_name_en']); ?>
+                                <?php echo htmlspecialchars($type['type_name_en'], ENT_QUOTES, 'UTF-8'); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -787,9 +787,9 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                     <select name="year" id="year" class="filter-select">
                         <option value="">All Years</option>
                         <?php foreach ($years as $year): ?>
-                            <option value="<?php echo $year; ?>" 
+                            <option value="<?php echo (int)$year; ?>" 
                                     <?php echo $yearFilter == $year ? 'selected' : ''; ?>>
-                                <?php echo $year; ?>
+                                <?php echo (int)$year; ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -835,21 +835,21 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
             <article class="publication-card">
                 <div class="publication-header">
                     <span class="publication-type-badge">
-                        <?php echo htmlspecialchars($pub['type_code'] ?? 'Unknown'); ?>
+                        <?php echo htmlspecialchars($pub['type_code'] ?? 'Unknown', ENT_QUOTES, 'UTF-8'); ?>
                     </span>
                     <span class="publication-year">
-                        <?php echo $pub['publication_year']; ?>
+                        <?php echo (int)$pub['publication_year']; ?>
                     </span>
                 </div>
                 
                 <h2 class="publication-title">
-                    <a href="publication.php?id=<?php echo $pub['publication_id']; ?>">
-                        <?php echo htmlspecialchars($pub['title']); ?>
+                    <a href="publication.php?id=<?php echo (int)$pub['publication_id']; ?>">
+                        <?php echo htmlspecialchars($pub['title'], ENT_QUOTES, 'UTF-8'); ?>
                     </a>
                 </h2>
                 
                 <div class="publication-authors">
-                    <strong>Authors:</strong> <?php echo htmlspecialchars($pub['authors']); ?>
+                    <strong>Authors:</strong> <?php echo htmlspecialchars($pub['authors'], ENT_QUOTES, 'UTF-8'); ?>
                 </div>
                 
                 <div class="publication-meta">
@@ -860,7 +860,7 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                             <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                             <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                         </svg>
-                        <span><?php echo htmlspecialchars($pub['faculty_name']); ?></span>
+                        <span><?php echo htmlspecialchars($pub['faculty_name'], ENT_QUOTES, 'UTF-8'); ?></span>
                     </div>
                     
                     <div class="meta-item">
@@ -868,7 +868,7 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                             <polyline points="9 22 9 12 15 12 15 22"></polyline>
                         </svg>
-                        <span><?php echo htmlspecialchars($pub['department_name']); ?></span>
+                        <span><?php echo htmlspecialchars($pub['department_name'], ENT_QUOTES, 'UTF-8'); ?></span>
                     </div>
                     
                     <?php if (!empty($pub['journal_name'])): ?>
@@ -877,7 +877,7 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
                             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
                         </svg>
-                        <span><?php echo htmlspecialchars($pub['journal_name']); ?></span>
+                        <span><?php echo htmlspecialchars($pub['journal_name'], ENT_QUOTES, 'UTF-8'); ?></span>
                     </div>
                     <?php endif; ?>
                     
@@ -889,7 +889,7 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                             <line x1="8" y1="2" x2="8" y2="6"></line>
                             <line x1="3" y1="10" x2="21" y2="10"></line>
                         </svg>
-                        <span><?php echo htmlspecialchars($pub['conference_name']); ?></span>
+                        <span><?php echo htmlspecialchars($pub['conference_name'], ENT_QUOTES, 'UTF-8'); ?></span>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -897,8 +897,9 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                 <?php if (!empty($pub['doi']) || !empty($pub['url'])): ?>
                 <div class="publication-links">
                     <?php if (!empty($pub['doi'])): ?>
-                    <a href="https://doi.org/<?php echo htmlspecialchars($pub['doi']); ?>" 
+                    <a href="https://doi.org/<?php echo htmlspecialchars($pub['doi'], ENT_QUOTES, 'UTF-8'); ?>" 
                        target="_blank" 
+                       rel="noopener noreferrer"
                        class="pub-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
@@ -910,8 +911,9 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                     <?php endif; ?>
                     
                     <?php if (!empty($pub['url'])): ?>
-                    <a href="<?php echo htmlspecialchars($pub['url']); ?>" 
+                    <a href="<?php echo htmlspecialchars($pub['url'], ENT_QUOTES, 'UTF-8'); ?>" 
                        target="_blank" 
+                       rel="noopener noreferrer"
                        class="pub-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
@@ -921,7 +923,7 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
                     </a>
                     <?php endif; ?>
                     
-                    <a href="publication.php?id=<?php echo $pub['publication_id']; ?>" class="pub-link">
+                    <a href="publication.php?id=<?php echo (int)$pub['publication_id']; ?>" class="pub-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                             <circle cx="12" cy="12" r="3"></circle>

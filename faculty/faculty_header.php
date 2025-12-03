@@ -105,6 +105,7 @@ if (isset($_SESSION['title'])) {
                 <div class="user-info">
                     <span class="user-name"><?php echo htmlspecialchars($user_name); ?></span>
                     <span class="user-role"><?php echo htmlspecialchars($user_title); ?></span>
+                    <a href="cv_information.php">My CV Information</a>
                 </div>
                 <a href="../logout.php" class="btn btn-secondary btn-sm">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 16px; height: 16px; margin-right: 4px;">
