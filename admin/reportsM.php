@@ -3,10 +3,9 @@
  * Admin Reports Page
  * 
  * Detaylı raporlama ve istatistik sayfası
- * NO OUTPUT BEFORE startSession()!
+ * Comprehensive reporting and statistics page
  */
 
-// Start session FIRST - before any output
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 require_once '../includes/auth.php';
@@ -20,215 +19,74 @@ $pdo = getDBConnection();
 // Rapor filtreleri (Report filters)
 $startYear = isset($_GET['start_year']) ? (int)$_GET['start_year'] : date('Y') - 5;
 $endYear = isset($_GET['end_year']) ? (int)$_GET['end_year'] : date('Y');
-$departmentFilter = isset($_GET['department']) ? (int)$_GET['department'] : 0;
+$departmentFilter = isset($_GET['department']) ? cleanInput($_GET['department']) : '';
 $typeFilter = isset($_GET['type']) ? (int)$_GET['type'] : 0;
 
-// Initialize all variables
-$generalStats = ['total_publications' => 0, 'active_authors' => 0, 'publication_types' => 0, 
-                 'latest_year' => 0, 'earliest_year' => 0, 'avg_age' => 0];
-$yearTrend = [];
-$typeDistribution = [];
-$deptDistribution = [];
-$topAuthors = [];
-$growthData = [];
-$monthlyActivity = [];
-$topJournals = [];
-$topConferences = [];
-$departments = [];
-$publicationTypes = [];
-
 try {
-    // ===== DEPARTMENTS FOR DROPDOWN =====
-    $stmtDepts = $pdo->query("
-        SELECT department_id, department_name_en, department_name_tr, faculty_name
-        FROM departments 
-        WHERE is_active = 1
-        ORDER BY display_order, department_name_en
-    ");
-    $departments = $stmtDepts->fetchAll(PDO::FETCH_ASSOC);
-    
-    // ===== PUBLICATION TYPES FOR DROPDOWN =====
-    $stmtTypes = $pdo->query("
-        SELECT type_id, type_name_en 
-        FROM publication_types 
-        WHERE is_active = 1
-        ORDER BY type_name_en
-    ");
-    $publicationTypes = $stmtTypes->fetchAll(PDO::FETCH_ASSOC);
-    
-    // ===== GENERAL STATISTICS =====
-    $sqlGeneral = "
+    // Genel İstatistikler (General Statistics)
+    $stmtGeneral = $pdo->query("
         SELECT 
             COUNT(DISTINCT p.publication_id) as total_publications,
             COUNT(DISTINCT p.user_id) as active_authors,
             COUNT(DISTINCT pt.type_id) as publication_types,
-            COALESCE(MAX(p.publication_year), 0) as latest_year,
-            COALESCE(MIN(p.publication_year), 0) as earliest_year,
-            COALESCE(AVG(YEAR(CURDATE()) - p.publication_year), 0) as avg_age
+            MAX(p.publication_year) as latest_year,
+            MIN(p.publication_year) as earliest_year,
+            AVG(YEAR(CURDATE()) - p.publication_year) as avg_age
         FROM publications p
         LEFT JOIN publication_types pt ON p.type_id = pt.type_id
-        LEFT JOIN users u ON p.user_id = u.user_id
-        WHERE 1=1
-    ";
+    ");
+    $generalStats = $stmtGeneral->fetch();
     
-    $paramsGeneral = [];
-    
-    if ($startYear > 0 && $endYear > 0) {
-        $sqlGeneral .= " AND p.publication_year BETWEEN :start_year AND :end_year";
-        $paramsGeneral[':start_year'] = $startYear;
-        $paramsGeneral[':end_year'] = $endYear;
-    }
-    
-    if ($departmentFilter > 0) {
-        $sqlGeneral .= " AND u.department_id = :department_id";
-        $paramsGeneral[':department_id'] = $departmentFilter;
-    }
-    
-    if ($typeFilter > 0) {
-        $sqlGeneral .= " AND p.type_id = :type_id";
-        $paramsGeneral[':type_id'] = $typeFilter;
-    }
-    
-    $stmtGeneral = $pdo->prepare($sqlGeneral);
-    $stmtGeneral->execute($paramsGeneral);
-    $generalStats = $stmtGeneral->fetch(PDO::FETCH_ASSOC);
-    
-    // ===== ANNUAL TREND =====
-    $sqlYearTrend = "
+    // Yıllık Trend (Annual Trend)
+    $stmtYearTrend = $pdo->prepare("
         SELECT 
-            p.publication_year,
+            publication_year,
             COUNT(*) as count,
-            COUNT(DISTINCT p.user_id) as unique_authors
-        FROM publications p
-        LEFT JOIN users u ON p.user_id = u.user_id
-        WHERE 1=1
-    ";
+            COUNT(DISTINCT user_id) as unique_authors
+        FROM publications
+        WHERE publication_year BETWEEN :start_year AND :end_year
+        GROUP BY publication_year
+        ORDER BY publication_year ASC
+    ");
+    $stmtYearTrend->execute([':start_year' => $startYear, ':end_year' => $endYear]);
+    $yearTrend = $stmtYearTrend->fetchAll();
     
-    $paramsYearTrend = [];
-    
-    if ($startYear > 0 && $endYear > 0) {
-        $sqlYearTrend .= " AND p.publication_year BETWEEN :start_year AND :end_year";
-        $paramsYearTrend[':start_year'] = $startYear;
-        $paramsYearTrend[':end_year'] = $endYear;
-    }
-    
-    if ($departmentFilter > 0) {
-        $sqlYearTrend .= " AND u.department_id = :department_id";
-        $paramsYearTrend[':department_id'] = $departmentFilter;
-    }
-    
-    if ($typeFilter > 0) {
-        $sqlYearTrend .= " AND p.type_id = :type_id";
-        $paramsYearTrend[':type_id'] = $typeFilter;
-    }
-    
-    $sqlYearTrend .= " GROUP BY p.publication_year ORDER BY p.publication_year ASC";
-    
-    $stmtYearTrend = $pdo->prepare($sqlYearTrend);
-    $stmtYearTrend->execute($paramsYearTrend);
-    $yearTrend = $stmtYearTrend->fetchAll(PDO::FETCH_ASSOC);
-    
-    // ===== TYPE DISTRIBUTION =====
-    $sqlByType = "
+    // Yayın Türlerine Göre Dağılım (Distribution by publication type)
+    $stmtByType = $pdo->query("
         SELECT 
             pt.type_name_en,
             pt.type_code,
             COUNT(p.publication_id) as count,
-            ROUND(COUNT(p.publication_id) * 100.0 / NULLIF((
-                SELECT COUNT(*) FROM publications p2
-                LEFT JOIN users u2 ON p2.user_id = u2.user_id
-                WHERE 1=1
-    ";
-    
-    $paramsByType = [];
-    
-    if ($startYear > 0 && $endYear > 0) {
-        $sqlByType .= " AND p2.publication_year BETWEEN :start_year_sub AND :end_year_sub";
-        $paramsByType[':start_year_sub'] = $startYear;
-        $paramsByType[':end_year_sub'] = $endYear;
-    }
-    
-    if ($departmentFilter > 0) {
-        $sqlByType .= " AND u2.department_id = :department_id_sub";
-        $paramsByType[':department_id_sub'] = $departmentFilter;
-    }
-    
-    $sqlByType .= "
-            ), 0), 2) as percentage
+            ROUND((COUNT(p.publication_id) * 100.0 / (SELECT COUNT(*) FROM publications)), 2) as percentage
         FROM publication_types pt
         LEFT JOIN publications p ON pt.type_id = p.type_id
-        LEFT JOIN users u ON p.user_id = u.user_id
-        WHERE 1=1
-    ";
+        GROUP BY pt.type_id, pt.type_name_en, pt.type_code
+        HAVING count > 0
+        ORDER BY count DESC
+    ");
+    $typeDistribution = $stmtByType->fetchAll();
     
-    if ($startYear > 0 && $endYear > 0) {
-        $sqlByType .= " AND p.publication_year BETWEEN :start_year AND :end_year";
-        $paramsByType[':start_year'] = $startYear;
-        $paramsByType[':end_year'] = $endYear;
-    }
-    
-    if ($departmentFilter > 0) {
-        $sqlByType .= " AND u.department_id = :department_id";
-        $paramsByType[':department_id'] = $departmentFilter;
-    }
-    
-    if ($typeFilter > 0) {
-        $sqlByType .= " AND p.type_id = :type_id";
-        $paramsByType[':type_id'] = $typeFilter;
-    }
-    
-    $sqlByType .= " GROUP BY pt.type_id, pt.type_name_en, pt.type_code HAVING count > 0 ORDER BY count DESC";
-    
-    $stmtByType = $pdo->prepare($sqlByType);
-    $stmtByType->execute($paramsByType);
-    $typeDistribution = $stmtByType->fetchAll(PDO::FETCH_ASSOC);
-    
-    // ===== DEPARTMENT DISTRIBUTION =====
-    $sqlByDept = "
+    // Departmanlara Göre Dağılım (Distribution by department)
+    $stmtByDept = $pdo->query("
         SELECT 
-            d.department_id,
-            d.department_name_en,
-            d.department_name_tr,
-            d.faculty_name,
+            u.department,
             COUNT(p.publication_id) as publication_count,
             COUNT(DISTINCT p.user_id) as faculty_count,
             ROUND(AVG(YEAR(CURDATE()) - p.publication_year), 1) as avg_publication_age
-        FROM departments d
-        INNER JOIN users u ON d.department_id = u.department_id
+        FROM users u
         LEFT JOIN publications p ON u.user_id = p.user_id
-        WHERE 1=1
-    ";
+        WHERE u.department IS NOT NULL AND u.department != ''
+        GROUP BY u.department
+        HAVING publication_count > 0
+        ORDER BY publication_count DESC
+    ");
+    $deptDistribution = $stmtByDept->fetchAll();
     
-    $paramsByDept = [];
-    
-    if ($startYear > 0 && $endYear > 0) {
-        $sqlByDept .= " AND p.publication_year BETWEEN :start_year AND :end_year";
-        $paramsByDept[':start_year'] = $startYear;
-        $paramsByDept[':end_year'] = $endYear;
-    }
-    
-    if ($departmentFilter > 0) {
-        $sqlByDept .= " AND d.department_id = :department_id";
-        $paramsByDept[':department_id'] = $departmentFilter;
-    }
-    
-    if ($typeFilter > 0) {
-        $sqlByDept .= " AND p.type_id = :type_id";
-        $paramsByDept[':type_id'] = $typeFilter;
-    }
-    
-    $sqlByDept .= " GROUP BY d.department_id, d.department_name_en, d.department_name_tr, d.faculty_name";
-    $sqlByDept .= " HAVING publication_count > 0 ORDER BY publication_count DESC";
-    
-    $stmtByDept = $pdo->prepare($sqlByDept);
-    $stmtByDept->execute($paramsByDept);
-    $deptDistribution = $stmtByDept->fetchAll(PDO::FETCH_ASSOC);
-    
-    // ===== TOP AUTHORS =====
-    $sqlTopAuthors = "
+    // En Üretken Yazarlar (Top 10) (Most productive authors)
+    $stmtTopAuthors = $pdo->query("
         SELECT 
             u.full_name,
-            COALESCE(d.department_name_en, 'Unknown') as department_name_en,
+            u.department,
             COUNT(p.publication_id) as publication_count,
             MIN(p.publication_year) as first_publication,
             MAX(p.publication_year) as last_publication,
@@ -236,177 +94,101 @@ try {
         FROM users u
         INNER JOIN publications p ON u.user_id = p.user_id
         LEFT JOIN publication_types pt ON p.type_id = pt.type_id
-        LEFT JOIN departments d ON u.department_id = d.department_id
-        WHERE 1=1
-    ";
+        GROUP BY u.user_id, u.full_name, u.department
+        ORDER BY publication_count DESC
+        LIMIT 10
+    ");
+    $topAuthors = $stmtTopAuthors->fetchAll();
     
-    $paramsTopAuthors = [];
-    
-    if ($startYear > 0 && $endYear > 0) {
-        $sqlTopAuthors .= " AND p.publication_year BETWEEN :start_year AND :end_year";
-        $paramsTopAuthors[':start_year'] = $startYear;
-        $paramsTopAuthors[':end_year'] = $endYear;
-    }
-    
-    if ($departmentFilter > 0) {
-        $sqlTopAuthors .= " AND u.department_id = :department_id";
-        $paramsTopAuthors[':department_id'] = $departmentFilter;
-    }
-    
-    if ($typeFilter > 0) {
-        $sqlTopAuthors .= " AND p.type_id = :type_id";
-        $paramsTopAuthors[':type_id'] = $typeFilter;
-    }
-    
-    $sqlTopAuthors .= " GROUP BY u.user_id, u.full_name, d.department_name_en";
-    $sqlTopAuthors .= " ORDER BY publication_count DESC LIMIT 10";
-    
-    $stmtTopAuthors = $pdo->prepare($sqlTopAuthors);
-    $stmtTopAuthors->execute($paramsTopAuthors);
-    $topAuthors = $stmtTopAuthors->fetchAll(PDO::FETCH_ASSOC);
-    
-    // ===== GROWTH DATA (simplified without LAG) =====
-    $sqlGrowth = "
+    // Yıllık Büyüme Analizi (Annual growth analysis)
+    $stmtGrowth = $pdo->query("
         SELECT 
-            p.publication_year,
-            COUNT(*) as yearly_count
-        FROM publications p
-        LEFT JOIN users u ON p.user_id = u.user_id
-        WHERE p.publication_year >= YEAR(CURDATE()) - 10
-    ";
+            publication_year,
+            COUNT(*) as yearly_count,
+            LAG(COUNT(*)) OVER (ORDER BY publication_year) as previous_year_count
+        FROM publications
+        WHERE publication_year >= YEAR(CURDATE()) - 10
+        GROUP BY publication_year
+        ORDER BY publication_year DESC
+    ");
+    $growthData = $stmtGrowth->fetchAll();
     
-    $paramsGrowth = [];
-    
-    if ($departmentFilter > 0) {
-        $sqlGrowth .= " AND u.department_id = :department_id";
-        $paramsGrowth[':department_id'] = $departmentFilter;
-    }
-    
-    if ($typeFilter > 0) {
-        $sqlGrowth .= " AND p.type_id = :type_id";
-        $paramsGrowth[':type_id'] = $typeFilter;
-    }
-    
-    $sqlGrowth .= " GROUP BY p.publication_year ORDER BY p.publication_year DESC";
-    
-    $stmtGrowth = $pdo->prepare($sqlGrowth);
-    $stmtGrowth->execute($paramsGrowth);
-    $growthData = $stmtGrowth->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Calculate previous_year_count manually
-    for ($i = 0; $i < count($growthData); $i++) {
-        if ($i < count($growthData) - 1) {
-            $growthData[$i]['previous_year_count'] = $growthData[$i + 1]['yearly_count'];
-        } else {
-            $growthData[$i]['previous_year_count'] = null;
-        }
-    }
-    
-    // ===== MONTHLY ACTIVITY =====
-    $sqlMonthly = "
+    // Son 12 Aydaki Aktivite (Last 12 months activity)
+    $stmtMonthly = $pdo->query("
         SELECT 
-            DATE_FORMAT(p.created_at, '%Y-%m') as month,
-            DATE_FORMAT(p.created_at, '%M %Y') as month_name,
+            DATE_FORMAT(created_at, '%Y-%m') as month,
+            DATE_FORMAT(created_at, '%M %Y') as month_name,
             COUNT(*) as count
-        FROM publications p
-        LEFT JOIN users u ON p.user_id = u.user_id
-        WHERE p.created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-    ";
+        FROM publications
+        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+        ORDER BY month DESC
+    ");
+    $monthlyActivity = $stmtMonthly->fetchAll();
     
-    $paramsMonthly = [];
-    
-    if ($departmentFilter > 0) {
-        $sqlMonthly .= " AND u.department_id = :department_id";
-        $paramsMonthly[':department_id'] = $departmentFilter;
-    }
-    
-    if ($typeFilter > 0) {
-        $sqlMonthly .= " AND p.type_id = :type_id";
-        $paramsMonthly[':type_id'] = $typeFilter;
-    }
-    
-    $sqlMonthly .= " GROUP BY DATE_FORMAT(p.created_at, '%Y-%m') ORDER BY month DESC";
-    
-    $stmtMonthly = $pdo->prepare($sqlMonthly);
-    $stmtMonthly->execute($paramsMonthly);
-    $monthlyActivity = $stmtMonthly->fetchAll(PDO::FETCH_ASSOC);
-    
-    // ===== TOP JOURNALS =====
-    $sqlJournals = "
+    // Dergi/Konferans İstatistikleri (Journal/Conference statistics)
+    $stmtJournals = $pdo->query("
         SELECT 
-            p.journal_name as name,
+            journal_name as name,
             COUNT(*) as count
-        FROM publications p
-        LEFT JOIN users u ON p.user_id = u.user_id
-        WHERE p.journal_name IS NOT NULL AND p.journal_name != ''
-    ";
+        FROM publications
+        WHERE journal_name IS NOT NULL AND journal_name != ''
+        GROUP BY journal_name
+        ORDER BY count DESC
+        LIMIT 10
+    ");
+    $topJournals = $stmtJournals->fetchAll();
     
-    $paramsJournals = [];
-    
-    if ($startYear > 0 && $endYear > 0) {
-        $sqlJournals .= " AND p.publication_year BETWEEN :start_year AND :end_year";
-        $paramsJournals[':start_year'] = $startYear;
-        $paramsJournals[':end_year'] = $endYear;
-    }
-    
-    if ($departmentFilter > 0) {
-        $sqlJournals .= " AND u.department_id = :department_id";
-        $paramsJournals[':department_id'] = $departmentFilter;
-    }
-    
-    if ($typeFilter > 0) {
-        $sqlJournals .= " AND p.type_id = :type_id";
-        $paramsJournals[':type_id'] = $typeFilter;
-    }
-    
-    $sqlJournals .= " GROUP BY p.journal_name ORDER BY count DESC LIMIT 10";
-    
-    $stmtJournals = $pdo->prepare($sqlJournals);
-    $stmtJournals->execute($paramsJournals);
-    $topJournals = $stmtJournals->fetchAll(PDO::FETCH_ASSOC);
-    
-    // ===== TOP CONFERENCES =====
-    $sqlConferences = "
+    $stmtConferences = $pdo->query("
         SELECT 
-            p.conference_name as name,
+            conference_name as name,
             COUNT(*) as count
-        FROM publications p
-        LEFT JOIN users u ON p.user_id = u.user_id
-        WHERE p.conference_name IS NOT NULL AND p.conference_name != ''
-    ";
+        FROM publications
+        WHERE conference_name IS NOT NULL AND conference_name != ''
+        GROUP BY conference_name
+        ORDER BY count DESC
+        LIMIT 10
+    ");
+    $topConferences = $stmtConferences->fetchAll();
     
-    $paramsConferences = [];
+    // Departman listesi (Department list for filter)
+    $stmtDepts = $pdo->query("
+        SELECT DISTINCT department 
+        FROM users 
+        WHERE department IS NOT NULL AND department != ''
+        ORDER BY department
+    ");
+    $departments = $stmtDepts->fetchAll();
     
-    if ($startYear > 0 && $endYear > 0) {
-        $sqlConferences .= " AND p.publication_year BETWEEN :start_year AND :end_year";
-        $paramsConferences[':start_year'] = $startYear;
-        $paramsConferences[':end_year'] = $endYear;
-    }
-    
-    if ($departmentFilter > 0) {
-        $sqlConferences .= " AND u.department_id = :department_id";
-        $paramsConferences[':department_id'] = $departmentFilter;
-    }
-    
-    if ($typeFilter > 0) {
-        $sqlConferences .= " AND p.type_id = :type_id";
-        $paramsConferences[':type_id'] = $typeFilter;
-    }
-    
-    $sqlConferences .= " GROUP BY p.conference_name ORDER BY count DESC LIMIT 10";
-    
-    $stmtConferences = $pdo->prepare($sqlConferences);
-    $stmtConferences->execute($paramsConferences);
-    $topConferences = $stmtConferences->fetchAll(PDO::FETCH_ASSOC);
+    // Yayın türleri (Publication types for filter)
+    $stmtTypes = $pdo->query("
+        SELECT type_id, type_name_en 
+        FROM publication_types 
+        WHERE is_active = TRUE
+        ORDER BY type_name_en
+    ");
+    $publicationTypes = $stmtTypes->fetchAll();
     
 } catch (PDOException $e) {
     error_log("Reports fetch error: " . $e->getMessage());
+    $generalStats = ['total_publications' => 0, 'active_authors' => 0, 'publication_types' => 0, 
+                     'latest_year' => 0, 'earliest_year' => 0, 'avg_age' => 0];
+    $yearTrend = [];
+    $typeDistribution = [];
+    $deptDistribution = [];
+    $topAuthors = [];
+    $growthData = [];
+    $monthlyActivity = [];
+    $topJournals = [];
+    $topConferences = [];
+    $departments = [];
+    $publicationTypes = [];
 }
 
 // Generate Report URL with filters
 $reportUrl = "generate_report.php?start_year=$startYear&end_year=$endYear";
-if ($departmentFilter > 0) {
-    $reportUrl .= "&department=$departmentFilter";
+if (!empty($departmentFilter)) {
+    $reportUrl .= "&department=" . urlencode($departmentFilter);
 }
 if ($typeFilter > 0) {
     $reportUrl .= "&type=$typeFilter";
@@ -424,7 +206,7 @@ include 'admin_header.php';
         <p class="text-muted">Comprehensive analytics and reporting dashboard</p>
     </div>
     <div style="display: flex; gap: 10px;">
-        <!-- GENERATE REPORT BUTTON -->
+        <!-- GENERATE REPORT BUTTON - NEW -->
         <a href="<?php echo $reportUrl; ?>" 
            target="_blank" 
            class="btn btn-primary"
@@ -483,9 +265,9 @@ include 'admin_header.php';
                 <select id="department" name="department">
                     <option value="">All Departments</option>
                     <?php foreach ($departments as $dept): ?>
-                        <option value="<?php echo $dept['department_id']; ?>" 
-                                <?php echo $departmentFilter === $dept['department_id'] ? 'selected' : ''; ?>>
-                            <?php echo sanitize($dept['department_name_en']); ?>
+                        <option value="<?php echo sanitize($dept['department']); ?>" 
+                                <?php echo $departmentFilter === $dept['department'] ? 'selected' : ''; ?>>
+                            <?php echo sanitize($dept['department']); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -652,7 +434,7 @@ include 'admin_header.php';
                         <div style="padding: var(--spacing-md); background: var(--gray-50); border-radius: var(--radius-md); border-left: 3px solid var(--primary-color);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-xs);">
                                 <strong style="font-size: 0.9375rem; color: var(--gray-900);">
-                                    <?php echo sanitize($dept['department_name_en']); ?>
+                                    <?php echo sanitize($dept['department']); ?>
                                 </strong>
                                 <span style="font-size: 1.25rem; font-weight: 700; color: var(--primary-color);">
                                     <?php echo $dept['publication_count']; ?>
@@ -701,7 +483,7 @@ include 'admin_header.php';
                                 </div>
                             </td>
                             <td><strong><?php echo sanitize($author['full_name']); ?></strong></td>
-                            <td><?php echo sanitize($author['department_name_en']); ?></td>
+                            <td><?php echo sanitize($author['department']); ?></td>
                             <td>
                                 <strong style="color: var(--primary-color); font-size: 1.125rem;">
                                     <?php echo $author['publication_count']; ?>
